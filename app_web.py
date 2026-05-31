@@ -3,19 +3,19 @@ import cv2
 import numpy as np
 from PIL import Image
 
-# 1. Cấu hình trang web
+# 1. Cấu hình trang web đầu tiên
 st.set_page_config(
-    page_title="AI Fingerprint Forensic Analyzer",
+    page_title="AI Fingerprint Forensic Mapping",
     page_icon="🧬",
     layout="wide"
 )
 
 # 2. Tiêu đề giao diện
-st.title("🧬 Hệ Thống Giám Định Vân Tay Tự Động Pro")
-st.subheader("Giao diện trực quan hóa: Đánh số cặp điểm trùng khớp & Tách biệt vùng định vị hình học")
+st.title("🧬 Hệ Thống Giám Định & Định Vị Vân Tay Hình Sự")
+st.subheader("Giao diện tối ưu: Đánh số cặp điểm đối chiếu độc lập và Khử hoàn toàn đường nối rối mắt")
 st.markdown("---")
 
-# 3. Khu vực Upload dữ liệu
+# 3. Khu vực Upload dữ liệu đầu vào
 col1, col2 = st.columns(2)
 
 with col1:
@@ -34,17 +34,17 @@ with col2:
 
 st.markdown("---")
 
-# 4. Xử lý logic thuật toán khi nhấn nút
+# 4. Xử lý logic thuật toán
 if st.button("🔥 KÍCH HOẠT ĐỐI SÁNH VÀ ĐÁNH SỐ ĐẶC TRƯNG", type="primary", use_container_width=True):
     if file1 is None or file2 is None:
         st.error("❌ Vui lòng tải lên đầy đủ cả 2 ảnh vân tay trước khi phân tích!")
     else:
-        with st.spinner("AI đang tính toán ma trận điểm và gán số thứ tự đối chiếu..."):
+        with st.spinner("AI đang quét ma trận đường vân và đồng bộ hóa số thứ tự cặp điểm..."):
             
             file1.seek(0)
             file2.seek(0)
             
-            # Đọc ảnh xám
+            # Đọc ảnh grayscale
             file_bytes1 = np.asarray(bytearray(file1.read()), dtype=np.uint8)
             img1 = cv2.imdecode(file_bytes1, cv2.IMREAD_GRAYSCALE)
 
@@ -52,9 +52,9 @@ if st.button("🔥 KÍCH HOẠT ĐỐI SÁNH VÀ ĐÁNH SỐ ĐẶC TRƯNG", typ
             img2 = cv2.imdecode(file_bytes2, cv2.IMREAD_GRAYSCALE)
 
             if img1 is None or img2 is None:
-                st.error("❌ File ảnh bị lỗi cấu trúc dữ liệu, không thể giải mã!")
+                st.error("❌ Không thể giải mã tệp ảnh. Vui lòng kiểm tra lại định dạng file!")
             else:
-                # --- BƯỚC 1: TIỀN XỬ LÝ ẢNH ---
+                # --- BƯỚC 1: TIỀN XỬ LÝ ẢNH NÂNG CẤP ---
                 clahe = cv2.createCLAHE(clipLimit=5.0, tileGridSize=(8,8))
                 img1_enhanced = clahe.apply(img1)
                 img2_enhanced = clahe.apply(img2)
@@ -66,14 +66,14 @@ if st.button("🔥 KÍCH HOẠT ĐỐI SÁNH VÀ ĐÁNH SỐ ĐẶC TRƯNG", typ
                 img2_final = cv2.adaptiveThreshold(img2_blur, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 15, 3)
 
                 # --- BƯỚC 2: TRÍCH XUẤT ĐẶC TRƯNG SIFT ---
-                sift = cv2.SIFT_create(nfeatures=2000)
+                sift = cv2.SIFT_create(nfeatures=2500)
                 kp1, des1 = sift.detectAndCompute(img1_final, None)
                 kp2, des2 = sift.detectAndCompute(img2_final, None)
 
                 if des1 is None or des2 is None:
-                    st.error("❌ AI không trích xuất được đặc trưng. Vui lòng cắt sát vùng vân hơn!")
+                    st.error("❌ Không đủ điểm đặc trưng. Hãy thử một ảnh cắt sát đường vân rõ nét hơn!")
                 else:
-                    # --- BƯỚC 3: SO KHỚP FLANN & LỌC LOWE'S RATIO ---
+                    # --- BƯỚC 3: SO KHỚP FLANN & LỌC ĐIỂM CHUẨN ---
                     FLANN_INDEX_KDTREE = 1
                     index_params = dict(algorithm=FLANN_INDEX_KDTREE, trees=5)
                     search_params = dict(checks=50)
@@ -88,42 +88,39 @@ if st.button("🔥 KÍCH HOẠT ĐỐI SÁNH VÀ ĐÁNH SỐ ĐẶC TRƯNG", typ
                             if m.distance < 0.72 * n.distance:
                                 good_matches.append(m)
 
-                    # --- BƯỚC 4: TÍNH PHẦN TRĂM ĐỘ TƯƠNG ĐỒNG ---
+                    # Tính phần trăm tương đồng
                     total_features = min(len(kp1), len(kp2))
                     match_percentage = (len(good_matches) / total_features) * 100 if total_features > 0 else 0.0
                     match_percentage = min(match_percentage * 4.0, 100.0)
 
-                    # --- BƯỚC 5: ĐỒ HỌA CHUYÊN BIỆT (ĐÁNH SỐ TỪNG CẶP ĐIỂM GIỐNG NHAU) ---
-                    # Tạo bản sao ảnh màu để vẽ cấu trúc riêng biệt
-                    img1_color = cv2.cvtColor(img1_enhanced, cv2.COLOR_GRAY2BGR)
-                    img2_color = cv2.cvtColor(img2_enhanced, cv2.COLOR_GRAY2BGR)
+                    # --- BƯỚC 4: VẼ ĐIỂM ĐẶC TRƯNG VÀ GÁN SỐ THỨ TỰ ĐỒNG NHẤT ---
+                    # Chuyển ảnh tăng cường sang ảnh màu BGR để vẽ ký hiệu màu sắc
+                    out_img1 = cv2.cvtColor(img1_enhanced, cv2.COLOR_GRAY2BGR)
+                    out_img2 = cv2.cvtColor(img2_enhanced, cv2.COLOR_GRAY2BGR)
 
-                    # Sắp xếp lấy tối đa 25 cặp điểm tốt nhất để ghi số không bị đè chữ
+                    # Sắp xếp và lấy ra 20 cặp điểm trùng khớp có độ chính xác cao nhất
                     good_matches = sorted(good_matches, key=lambda x: x.distance)
-                    display_matches = good_matches[:25]
+                    display_matches = good_matches[:20]
 
                     for idx, m in enumerate(display_matches, start=1):
-                        # Lấy tọa độ điểm trên ảnh 1 và ảnh 2
                         pt1 = tuple(np.round(kp1[m.queryIdx].pt).astype(int))
                         pt2 = tuple(np.round(kp2[m.trainIdx].pt).astype(int))
 
-                        # 🔴 Ảnh bên trái: Chỉ vẽ vòng tròn Màu Đỏ (BGR: 0, 0, 255)
-                        cv2.circle(img1_color, pt1, radius=6, color=(0, 0, 255), thickness=2)
-                        # Ghi số thứ tự màu đỏ ngay cạnh điểm đặc trưng
-                        cv2.putText(img1_color, str(idx), (pt1[0] + 8, pt1[1] + 5), 
-                                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2, cv2.LINE_AA)
+                        # 🔴 Ảnh bên trái (Ảnh 1): Chỉ vẽ vòng tròn và số Màu Đỏ
+                        cv2.circle(out_img1, pt1, radius=6, color=(0, 0, 255), thickness=2)
+                        cv2.putText(out_img1, str(idx), (pt1[0] + 8, pt1[1] + 5), 
+                                    cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 0, 255), 2, cv2.LINE_AA)
 
-                        # 🔵 Ảnh bên phải: Chỉ vẽ vòng tròn Màu Xanh Dương (BGR: 255, 0, 0)
-                        cv2.circle(img2_color, pt2, radius=6, color=(255, 0, 0), thickness=2)
-                        # Ghi số thứ tự trùng khớp màu xanh dương ngay cạnh điểm
-                        cv2.putText(img2_color, str(idx), (pt2[0] + 8, pt2[1] + 5), 
-                                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2, cv2.LINE_AA)
+                        # 🔵 Ảnh bên phải (Ảnh 2): Chỉ vẽ vòng tròn và số Màu Xanh Dương (BGR: 255, 0, 0)
+                        cv2.circle(out_img2, pt2, radius=6, color=(255, 0, 0), thickness=2)
+                        cv2.putText(out_img2, str(idx), (pt2[0] + 8, pt2[1] + 5), 
+                                    cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 0, 0), 2, cv2.LINE_AA)
 
-                    # Ghép 2 ảnh nằm ngang song song nhưng KHÔNG vẽ đường nối chăng ngang
-                    comparison_img = np.hstack((img1_color, img2_color))
-                    comparison_rgb = cv2.cvtColor(comparison_img, cv2.COLOR_BGR2RGB)
+                    # Chuyển đổi định dạng màu sang RGB để Streamlit hiển thị chính xác
+                    out_img1_rgb = cv2.cvtColor(out_img1, cv2.COLOR_BGR2RGB)
+                    out_img2_rgb = cv2.cvtColor(out_img2, cv2.COLOR_BGR2RGB)
 
-                    # --- BƯỚC 6: XỬ LÝ KHU VỰC KHOANH VÙNG VỊ TRÍ ĐỘC LẬP (ĐƯA XUỐNG DƯỚI) ---
+                    # --- BƯỚC 5: TÍNH TOÁN KHU VỰC KHOANH VÙNG ĐỊNH VỊ TỰ ĐỘNG ---
                     img_localization = cv2.cvtColor(img2_enhanced, cv2.COLOR_GRAY2BGR)
                     localization_success = False
 
@@ -137,28 +134,37 @@ if st.button("🔥 KÍCH HOẠT ĐỐI SÁNH VÀ ĐÁNH SỐ ĐẶC TRƯNG", typ
                             h, w = img1.shape
                             pts = np.float32([[0, 0], [0, h - 1], [w - 1, h - 1], [w - 1, 0]]).reshape(-1, 1, 2)
                             dst = cv2.perspectiveTransform(pts, M)
-                            # Vẽ hộp bao định vị màu Xanh Neon đậm nét lên ảnh riêng biệt này
+                            # Vẽ hộp chữ nhật bao màu Xanh Neon lên ảnh bối cảnh đầy đủ
                             img_localization = cv2.polylines(img_localization, [np.int32(dst)], True, (255, 255, 0), 5, cv2.LINE_AA)
 
                     img_localization_rgb = cv2.cvtColor(img_localization, cv2.COLOR_BGR2RGB)
 
-                    # --- BƯỚC 7: XUẤT KẾT QUẢ ĐỒ HỌA RA MÀN HÌNH WEB ---
-                    st.success("🎉 Đã tối ưu hóa giao diện phân tích thành công!")
+                    # --- BƯỚC 6: HIỂN THỊ KẾT QUẢ PHÂN TÁCH TRÊN WEB ---
+                    st.success("🎉 Quá trình trích xuất và phân tích hình học hoàn tất!")
                     
-                    st.metric(label="Độ tương đồng cấu trúc vân", value=f"{match_percentage:.2f} %")
-                    st.metric(label="Số lượng cặp điểm lõi trùng khớp đánh số", value=f"{len(good_matches)} điểm")
+                    # Khu vực chỉ số đo lường
+                    m_col1, m_col2 = st.columns(2)
+                    with m_col1:
+                        st.metric(label="Độ tương đồng vân tay", value=f"{match_percentage:.2f} %")
+                    with m_col2:
+                        st.metric(label="Số cặp điểm trùng khớp được đánh số", value=f"{len(good_matches)} điểm")
 
-                    # Phần hiển thị Bản đồ so sánh điểm đặc trưng ở TRÊN
-                    st.markdown("### 📊 1. Bản Đồ Đối Chiếu Các Cặp Đặc Điểm Đồng Nhất (Đã Đánh Số Thứ Tự)")
-                    st.caption("Mẹo xem: Tìm các số giống nhau ở ô Đỏ (Ảnh trái) và ô Xanh (Ảnh phải) để đối chiếu trực tiếp cấu trúc vân tay.")
-                    st.image(comparison_rgb, caption="Ảnh trái (Chỉ điểm Đỏ) vs Ảnh phải (Chỉ điểm Xanh Dương) - Không bị rối đường nối", use_container_width=True)
+                    # PHẦN 1: BẢN ĐỒ ĐỐI CHIẾU ĐIỂM ĐẶC TRƯNG (Ở TRÊN)
+                    st.markdown("### 📊 1. Sơ Đồ Đối Chiếu Các Điểm Đặc Trưng Đồng Nhất")
+                    st.caption("Cách tra cứu: So sánh các cặp số giống nhau giữa ô bên trái (Màu đỏ) và ô bên phải (Màu xanh dương) để kiểm tra cấu trúc.")
+                    
+                    res_col1, res_col2 = st.columns(2)
+                    with res_col1:
+                        st.image(out_img1_rgb, caption="Ảnh 1: Vùng đặc trưng trích xuất (Chỉ đánh dấu ĐỎ)", use_container_width=True)
+                    with res_col2:
+                        st.image(out_img2_rgb, caption="Ảnh 2: Điểm đối chiếu tương ứng (Chỉ đánh dấu XANH DƯƠNG)", use_container_width=True)
 
                     st.markdown("---")
 
-                    # Phần hiển thị Khoanh vùng vị trí hình học tách riêng ở DƯỚI
-                    st.markdown("### 🗺️ 2. Bản Đồ Xác Định Vùng Vị Trí Cấu Trúc (Localization Map)")
+                    # PHẦN 2: ẢNH KHOANH VÙNG VỊ TRÍ ĐỘC LẬP (TÁCH XUỐNG DƯỚI)
+                    st.markdown("### 🗺️ 2. Bản Đồ Xác Định Vùng Vị Trí Cấu Trúc (Localization Result)")
                     if localization_success and match_percentage >= 40:
-                        st.info("🎯 Khung hình chữ nhật màu Xanh Neon dưới đây biểu thị chính xác tọa độ vùng không gian mà Ảnh 1 đang chiếm chỗ trên Bản vân đầy đủ (Ảnh 2).")
-                        st.image(img_localization_rgb, caption="Vùng vị trí được định vị bằng thuật toán ma trận đồng cấu Homography", use_container_width=True)
+                        st.info("🎯 Khung hình chữ nhật màu Xanh Neon dưới đây thể hiện chính xác vị trí và góc nghiêng của vùng vân tay Ảnh 1 khi nằm trên Bản đầy đủ (Ảnh 2).")
+                        st.image(img_localization_rgb, caption="Vị trí vùng vân tay được định vị trên ảnh bối cảnh đầy đủ", use_container_width=True)
                     else:
-                        st.warning("⚠️ Độ tương đồng hoặc mật độ điểm chưa đủ cao để dựng khung định vị tự động cho bức ảnh này.")
+                        st.warning("⚠️ Mật độ điểm hoặc chất lượng đường vân chưa đủ để thuật toán tự động dựng khung bao hình học.")
