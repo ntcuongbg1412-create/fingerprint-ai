@@ -23,7 +23,6 @@ with col1:
     file1 = st.file_uploader("Chọn ảnh vân tay 1...", type=["jpg", "jpeg", "png", "bmp"], key="file1")
     if file1:
         img1_pil = Image.open(file1)
-        # Sửa use_column_width thành use_container_width để hết cảnh báo vàng
         st.image(img1_pil, caption="Ảnh 1 gốc", use_container_width=True)
 
 with col2:
@@ -40,14 +39,14 @@ if st.button("🔥 BẮT ĐẦU PHÂN TÍCH SO KHỚP", type="primary", use_cont
     if file1 is None or file2 is None:
         st.error("❌ Vui lòng tải lên đầy đủ cả 2 ảnh vân tay trước khi phân tích!")
     else:
-        # Hiển thị hiệu ứng loading xoay tròn chuyên nghiệp của Web
+        # Hiển thị hiệu ứng loading xoay tròn
         with st.spinner("AI đang lọc nhiễu, làm nét đường vân và đối sánh..."):
             
-            # ĐƯA CON TRỎ ĐỌC VỀ ĐẦU FILE ĐỂ TRÁNH LỖI BUF.EMPTY()
+            # Đưa con trỏ đọc về đầu file để tránh lỗi empty buf
             file1.seek(0)
             file2.seek(0)
             
-            # Chuyển ảnh từ định dạng định dạng Streamlit sang cấu trúc OpenCV (Numpy Array)
+            # Chuyển ảnh sang cấu trúc OpenCV (Màu xám)
             file_bytes1 = np.asarray(bytearray(file1.read()), dtype=np.uint8)
             img1 = cv2.imdecode(file_bytes1, cv2.IMREAD_GRAYSCALE)
 
@@ -58,16 +57,13 @@ if st.button("🔥 BẮT ĐẦU PHÂN TÍCH SO KHỚP", type="primary", use_cont
                 st.error("❌ Không thể đọc được dữ liệu hình ảnh. Vui lòng kiểm tra lại định dạng file ảnh của bạn!")
             else:
                 # --- TIỀN XỬ LÝ NÂNG CẤP (Xử lý ảnh mờ, nhòe) ---
-                # 1. Tăng cường độ tương phản bằng CLAHE
-                clahe = cv2.createCLEHE = cv2.createCLAHE(clipLimit=4.0, tileGridSize=(8,8))
+                clahe = cv2.createCLAHE(clipLimit=4.0, tileGridSize=(8,8))
                 img1_enhanced = clahe.apply(img1)
                 img2_enhanced = clahe.apply(img2)
 
-                # 2. Khử nhiễu hạt và làm mịn các cạnh vân bị nhòe
                 img1_blur = cv2.bilateralFilter(img1_enhanced, d=9, sigmaColor=75, sigmaSpace=75)
                 img2_blur = cv2.bilateralFilter(img2_enhanced, d=9, sigmaColor=75, sigmaSpace=75)
 
-                # 3. Kỹ thuật chuyển đổi làm rõ nét đường vân (Adaptive Thresholding)
                 img1_final = cv2.adaptiveThreshold(img1_blur, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
                 img2_final = cv2.adaptiveThreshold(img2_blur, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
 
@@ -87,6 +83,9 @@ if st.button("🔥 BẮT ĐẦU PHÂN TÍCH SO KHỚP", type="primary", use_cont
                     # Lọc các điểm khớp có chất lượng tốt
                     good_matches = [m for m in matches if m.distance < 45]
 
+                    # Giới hạn hiển thị tối đa 40 điểm tốt nhất để không bị rối mắt
+                    display_matches = good_matches[:40]
+
                     # --- TÍNH PHẦN TRĂM ĐỘ TƯƠNG ĐỒNG ---
                     total_features = min(len(kp1), len(kp2))
                     if total_features > 0:
@@ -95,9 +94,25 @@ if st.button("🔥 BẮT ĐẦU PHÂN TÍCH SO KHỚP", type="primary", use_cont
                     else:
                         match_percentage = 0.0
 
-                    # --- VẼ BẢN ĐỒ ĐIỂM GIỐNG NHAU ---
+                    # --- CHUYỂN ẢNH GỐC SANG MÀU ĐỂ VẼ VÒNG TRÒN ĐỎ ---
+                    img1_color = cv2.cvtColor(img1_enhanced, cv2.COLOR_GRAY2BGR)
+                    img2_color = cv2.cvtColor(img2_enhanced, cv2.COLOR_GRAY2BGR)
+
+                    # Tiến hành khoanh tròn đỏ vào các điểm khớp trên Ảnh 1 và Ảnh 2
+                    for m in display_matches:
+                        # Lấy tọa độ điểm trên ảnh 1
+                        pt1 = tuple(np.round(kp1[m.queryIdx].pt).astype(int))
+                        # Lấy tọa độ điểm trên ảnh 2
+                        pt2 = tuple(np.round(kp2[m.trainIdx].pt).astype(int))
+                        
+                        # Vẽ vòng tròn màu đỏ (BGR: 0, 0, 255), độ dày viền là 2, bán kính là 8
+                        cv2.circle(img1_color, pt1, radius=8, color=(0, 0, 255), thickness=2)
+                        cv2.circle(img2_color, pt2, radius=8, color=(0, 0, 255), thickness=2)
+
+                    # --- VẼ BẢN ĐỒ ĐIỂM GIỐNG NHAU (Nối các điểm đã khoanh tròn) ---
                     result_img = cv2.drawMatches(
-                        img1_enhanced, kp1, img2_enhanced, kp2, good_matches[:40], None,
+                        img1_color, kp1, img2_color, kp2, display_matches, None,
+                        matchColor=(0, 255, 0), # Đường nối màu xanh lá cho nổi bật
                         flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS
                     )
                     result_img_rgb = cv2.cvtColor(result_img, cv2.COLOR_BGR2RGB)
@@ -120,4 +135,4 @@ if st.button("🔥 BẮT ĐẦU PHÂN TÍCH SO KHỚP", type="primary", use_cont
                         st.markdown("<h3 style='color:#ff3333; text-align:center;'>KẾT LUẬN: KHÔNG TRÙNG KHỚP</h3>", unsafe_allow_html=True)
 
                     st.markdown("### 📊 Bản đồ đối chiếu các điểm đặc trưng giống nhau (Feature Keypoints Mapping)")
-                    st.image(result_img_rgb, caption="Các đường nối thể hiện các vị trí có cấu trúc vân tương đồng nhau", use_container_width=True)
+                    st.image(result_img_rgb, caption="Các vòng tròn đỏ thể hiện vị trí điểm tương đồng, đường xanh nối các điểm trùng khớp giữa 2 ảnh", use_container_width=True)
